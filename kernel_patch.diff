@@ -1,0 +1,47 @@
+--- linux-5.4.60-gentoo/net/bluetooth/l2cap_core.c	2020-09-09 14:44:23.216723181 +0200
++++ linux-5.4.60-gentoo_hacked/net/bluetooth/l2cap_core.c	2020-09-09 09:44:43.602077800 +0200
+@@ -887,6 +887,11 @@
+ 	       chan->move_state != L2CAP_MOVE_WAIT_PREPARE;
+ }
+ 
++static void do_nothing(struct l2cap_conn*, struct sk_buff**);
++static void do_nothing(struct l2cap_conn *conn, struct sk_buff **pskb) {}
++void (*l2cap_send_inspector)(struct l2cap_conn*, struct sk_buff**) = do_nothing;
++EXPORT_SYMBOL_GPL(l2cap_send_inspector);
++
+ static void l2cap_do_send(struct l2cap_chan *chan, struct sk_buff *skb)
+ {
+ 	struct hci_conn *hcon = chan->conn->hcon;
+@@ -915,6 +920,8 @@
+ 	else
+ 		flags = ACL_START;
+ 
++	l2cap_send_inspector(chan->conn, &skb);
++
+ 	bt_cb(skb)->force_active = test_bit(FLAG_FORCE_ACTIVE, &chan->flags);
+ 	hci_send_acl(chan->conn->hchan, skb, flags);
+ }
+@@ -7012,9 +7019,12 @@
+ 	kfree_skb(skb);
+ }
+ 
++void (*l2cap_recv_inspector)(struct l2cap_conn*, struct sk_buff**) = do_nothing;
++EXPORT_SYMBOL_GPL(l2cap_recv_inspector);
++
+ static void l2cap_recv_frame(struct l2cap_conn *conn, struct sk_buff *skb)
+ {
+-	struct l2cap_hdr *lh = (void *) skb->data;
++	struct l2cap_hdr *lh;
+ 	struct hci_conn *hcon = conn->hcon;
+ 	u16 cid, len;
+ 	__le16 psm;
+@@ -7025,6 +7035,9 @@
+ 		return;
+ 	}
+ 
++	l2cap_recv_inspector(conn,&skb);
++	lh = (void *) skb->data;
++
+ 	skb_pull(skb, L2CAP_HDR_SIZE);
+ 	cid = __le16_to_cpu(lh->cid);
+ 	len = __le16_to_cpu(lh->len);
